@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import './App.css'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Github, FolderOpen, File, ChevronDown, ChevronRight, Copy, Download, Trash2, Save } from 'lucide-react'
+import { Github, FolderOpen, File, ChevronDown, ChevronRight, Copy, Download, Trash2, Save, Upload, Globe } from 'lucide-react'
 
 interface TreeItem {
   path: string
@@ -17,6 +17,7 @@ interface FileNode {
   path: string
   url: string
   type: 'file'
+  content?: string
 }
 
 interface DirectoryNode {
@@ -34,9 +35,12 @@ interface SavedPreferences {
   timestamp: number
 }
 
+type UploadMode = 'local' | 'github'
+
 const COMMON_EXTENSIONS = ['.js', '.py', '.java', '.cpp', '.html', '.css', '.ts', '.jsx', '.tsx', '.go', '.rs', '.rb', '.php']
 
 function App() {
+  const [mode, setMode] = useState<UploadMode>('local')
   const [repoUrl, setRepoUrl] = useState('')
   const [accessToken, setAccessToken] = useState('')
   const [tree, setTree] = useState<TreeNode[]>([])
@@ -48,6 +52,9 @@ function App() {
   const [error, setError] = useState('')
   const [repoKey, setRepoKey] = useState('')
   const [hasSavedPrefs, setHasSavedPrefs] = useState(false)
+  const [localFiles, setLocalFiles] = useState<Map<string, File>>(new Map())
+  const [directoryName, setDirectoryName] = useState('')
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     const savedToken = localStorage.getItem('githubAccessToken')
@@ -56,8 +63,11 @@ function App() {
     }
   }, [])
 
-  const getRepoKey = (url: string): string => {
-    const match = url.match(/github\.com\/([^\/]+)\/([^\/]+)/)
+  const getRepoKey = (identifier: string, isLocal: boolean): string => {
+    if (isLocal) {
+      return `repo2txt_local_prefs_${identifier.replace(/[^a-zA-Z0-9]/g, '_')}`
+    }
+    const match = identifier.match(/github\.com\/([^\/]+)\/([^\/]+)/)
     if (match) {
       return `repo2txt_prefs_${match[1]}_${match[2]}`
     }
@@ -118,6 +128,133 @@ function App() {
       localStorage.removeItem(repoKey)
       setHasSavedPrefs(false)
     }
+  }
+
+  const handleLocalDirectorySelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files
+    if (!files || files.length === 0) return
+
+    setLoading(true)
+    setError('')
+    setOutputText('')
+    setTree([])
+    setLocalFiles(new Map())
+
+    try {
+      const fileMap = new Map<string, File>()
+      const paths: string[] = []
+      let rootDirName = ''
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i]
+        const relativePath = file.webkitRelativePath
+        
+        if (!rootDirName && relativePath) {
+          rootDirName = relativePath.split('/')[0]
+        }
+        
+        if (relativePath.includes('/.git/') || relativePath.includes('/node_modules/')) {
+          continue
+        }
+        
+        const normalizedPath = '/' + relativePath
+        fileMap.set(normalizedPath, file)
+        paths.push(normalizedPath)
+      }
+
+      setDirectoryName(rootDirName)
+      setLocalFiles(fileMap)
+
+      const treeStructure = buildTreeFromPaths(paths, rootDirName)
+      setTree(treeStructure)
+
+      const allPaths = getAllFilePaths(treeStructure)
+      const key = getRepoKey(rootDirName, true)
+      setRepoKey(key)
+
+      const savedSelection = loadPreferences(key, allPaths)
+      if (savedSelection) {
+        setSelectedFiles(savedSelection)
+        setHasSavedPrefs(true)
+      } else {
+        const defaultSelected = new Set<string>()
+        allPaths.forEach(path => {
+          const ext = '.' + path.split('.').pop()?.toLowerCase()
+          if (COMMON_EXTENSIONS.includes(ext)) {
+            defaultSelected.add(path)
+          }
+        })
+        setSelectedFiles(defaultSelected)
+        setHasSavedPrefs(false)
+      }
+
+      const extMap = new Map<string, boolean>()
+      allPaths.forEach(path => {
+        const ext = path.split('.').pop()?.toLowerCase() || ''
+        if (!extMap.has(ext)) {
+          extMap.set(ext, COMMON_EXTENSIONS.includes('.' + ext))
+        }
+      })
+      setExtensions(extMap)
+
+      setExpandedDirs(new Set(['./']))
+
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const buildTreeFromPaths = (paths: string[], rootName: string): TreeNode[] => {
+    const root: DirectoryNode = { name: rootName || './', path: './', type: 'directory', children: [] }
+
+    paths.forEach(fullPath => {
+      const parts = fullPath.split('/').filter(Boolean)
+      let current = root
+
+      parts.forEach((part, index) => {
+        if (index === parts.length - 1) {
+          current.children.push({
+            name: part,
+            path: fullPath,
+            url: '',
+            type: 'file'
+          })
+        } else if (index > 0) {
+          let dir = current.children.find(
+            c => c.type === 'directory' && c.name === part
+          ) as DirectoryNode | undefined
+
+          if (!dir) {
+            dir = {
+              name: part,
+              path: '/' + parts.slice(0, index + 1).join('/'),
+              type: 'directory',
+              children: []
+            }
+            current.children.push(dir)
+          }
+          current = dir
+        }
+      })
+    })
+
+    const sortNodes = (nodes: TreeNode[]): TreeNode[] => {
+      return nodes.sort((a, b) => {
+        if (a.type !== b.type) {
+          return a.type === 'directory' ? -1 : 1
+        }
+        return a.name.localeCompare(b.name)
+      }).map(node => {
+        if (node.type === 'directory') {
+          return { ...node, children: sortNodes(node.children) }
+        }
+        return node
+      })
+    }
+
+    return [{ ...root, children: sortNodes(root.children) }]
   }
 
   const parseRepoUrl = (url: string): { owner: string; repo: string; ref: string; path: string } => {
@@ -190,7 +327,7 @@ function App() {
       setTree(treeStructure)
       
       const allPaths = getAllFilePaths(treeStructure)
-      const key = getRepoKey(repoUrl)
+      const key = getRepoKey(repoUrl, false)
       setRepoKey(key)
       
       const savedSelection = loadPreferences(key, allPaths)
@@ -354,39 +491,52 @@ function App() {
         throw new Error('No files selected')
       }
 
-      const headers: HeadersInit = {
-        'Accept': 'application/vnd.github.v3.raw'
-      }
-      if (accessToken) {
-        headers['Authorization'] = `token ${accessToken}`
-      }
+      let contents: { path: string; text: string }[]
 
-      const findFileUrl = (path: string, nodes: TreeNode[]): string | null => {
-        for (const node of nodes) {
-          if (node.type === 'file' && node.path === path) {
-            return node.url
-          }
-          if (node.type === 'directory') {
-            const found = findFileUrl(path, node.children)
-            if (found) return found
-          }
+      if (localFiles.size > 0) {
+        contents = await Promise.all(
+          selected.map(async path => {
+            const file = localFiles.get(path)
+            if (!file) throw new Error(`File not found: ${path}`)
+            const text = await file.text()
+            return { path, text }
+          })
+        )
+      } else {
+        const headers: HeadersInit = {
+          'Accept': 'application/vnd.github.v3.raw'
         }
-        return null
-      }
+        if (accessToken) {
+          headers['Authorization'] = `token ${accessToken}`
+        }
 
-      const contents = await Promise.all(
-        selected.map(async path => {
-          const url = findFileUrl(path, tree)
-          if (!url) throw new Error(`URL not found for ${path}`)
-          
-          const response = await fetch(url, { headers })
-          if (!response.ok) {
-            throw new Error(`Failed to fetch ${path}`)
+        const findFileUrl = (path: string, nodes: TreeNode[]): string | null => {
+          for (const node of nodes) {
+            if (node.type === 'file' && node.path === path) {
+              return node.url
+            }
+            if (node.type === 'directory') {
+              const found = findFileUrl(path, node.children)
+              if (found) return found
+            }
           }
-          const text = await response.text()
-          return { path, text }
-        })
-      )
+          return null
+        }
+
+        contents = await Promise.all(
+          selected.map(async path => {
+            const url = findFileUrl(path, tree)
+            if (!url) throw new Error(`URL not found for ${path}`)
+            
+            const response = await fetch(url, { headers })
+            if (!response.ok) {
+              throw new Error(`Failed to fetch ${path}`)
+            }
+            const text = await response.text()
+            return { path, text }
+          })
+        )
+      }
 
       const treeIndex = buildTreeIndex(selected)
       let output = `Directory Structure:\n\n${treeIndex}\n`
@@ -517,48 +667,95 @@ function App() {
       <div className="max-w-4xl mx-auto p-6">
         <div className="bg-white rounded-lg shadow-lg p-6">
           <div className="flex items-center justify-between mb-2">
-            <h1 className="text-2xl font-bold text-gray-800">GitHub to Plain Text</h1>
+            <h1 className="text-2xl font-bold text-gray-800">Repo to Plain Text</h1>
             <a href="https://github.com" target="_blank" rel="noopener noreferrer">
               <Github className="w-6 h-6 text-gray-600 hover:text-gray-800" />
             </a>
           </div>
-          <p className="text-gray-600 mb-6">Convert Code in GitHub to a Single Formatted Text File</p>
-          <p className="text-sm text-blue-600 mb-6">This version remembers your file selections for each repository!</p>
+          <p className="text-gray-600 mb-4">Convert Code Repository to a Single Formatted Text File</p>
+          <p className="text-sm text-blue-600 mb-6">This version remembers your file selections!</p>
 
-          <div className="space-y-4 mb-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">GitHub URL:</label>
-              <Input
-                type="text"
-                value={repoUrl}
-                onChange={(e) => setRepoUrl(e.target.value)}
-                placeholder="https://github.com/owner/repo"
-                className="w-full"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Personal Access Token (optional - for private repos and higher rate limits):
-              </label>
-              <Input
-                type="password"
-                value={accessToken}
-                onChange={(e) => setAccessToken(e.target.value)}
-                placeholder="ghp_xxxxxxxxxxxx"
-                className="w-full"
-              />
-            </div>
-
+          <div className="flex gap-2 mb-6">
             <Button
-              onClick={fetchRepoTree}
-              disabled={loading || !repoUrl}
-              className="w-full bg-blue-600 hover:bg-blue-700"
+              variant={mode === 'local' ? 'default' : 'outline'}
+              onClick={() => setMode('local')}
+              className={mode === 'local' ? 'bg-blue-600 hover:bg-blue-700' : ''}
             >
-              <FolderOpen className="w-4 h-4 mr-2" />
-              {loading ? 'Fetching...' : 'Fetch Directory Structure'}
+              <Upload className="w-4 h-4 mr-2" />
+              Local Directory
+            </Button>
+            <Button
+              variant={mode === 'github' ? 'default' : 'outline'}
+              onClick={() => setMode('github')}
+              className={mode === 'github' ? 'bg-blue-600 hover:bg-blue-700' : ''}
+            >
+              <Globe className="w-4 h-4 mr-2" />
+              GitHub URL
             </Button>
           </div>
+
+          {mode === 'local' && (
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Select Directory:</label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  onChange={handleLocalDirectorySelect}
+                  className="hidden"
+                  {...{ webkitdirectory: '', directory: '' } as React.InputHTMLAttributes<HTMLInputElement>}
+                />
+                <Button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={loading}
+                  className="w-full bg-blue-600 hover:bg-blue-700"
+                >
+                  <FolderOpen className="w-4 h-4 mr-2" />
+                  {loading ? 'Processing...' : directoryName ? `Selected: ${directoryName}` : 'Choose Directory'}
+                </Button>
+              </div>
+              <p className="text-sm text-gray-500">
+                Select a folder from your computer. Files in .git and node_modules folders are automatically excluded.
+              </p>
+            </div>
+          )}
+
+          {mode === 'github' && (
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">GitHub URL:</label>
+                <Input
+                  type="text"
+                  value={repoUrl}
+                  onChange={(e) => setRepoUrl(e.target.value)}
+                  placeholder="https://github.com/owner/repo"
+                  className="w-full"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Personal Access Token (optional - for private repos and higher rate limits):
+                </label>
+                <Input
+                  type="password"
+                  value={accessToken}
+                  onChange={(e) => setAccessToken(e.target.value)}
+                  placeholder="ghp_xxxxxxxxxxxx"
+                  className="w-full"
+                />
+              </div>
+
+              <Button
+                onClick={fetchRepoTree}
+                disabled={loading || !repoUrl}
+                className="w-full bg-blue-600 hover:bg-blue-700"
+              >
+                <FolderOpen className="w-4 h-4 mr-2" />
+                {loading ? 'Fetching...' : 'Fetch Directory Structure'}
+              </Button>
+            </div>
+          )}
 
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
@@ -570,7 +767,7 @@ function App() {
             <>
               {hasSavedPrefs && (
                 <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded mb-4 flex items-center justify-between">
-                  <span>Restored your saved file preferences for this repository.</span>
+                  <span>Restored your saved file preferences. You can modify and save again.</span>
                   <Button
                     variant="outline"
                     size="sm"
