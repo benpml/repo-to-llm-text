@@ -711,7 +711,7 @@ function App() {
         <div className="bg-white rounded-lg shadow-lg p-6">
           <div className="flex items-center justify-between mb-2">
             <h1 className="text-2xl font-bold text-gray-800">Repo to Plain Text</h1>
-            <a href="https://github.com" target="_blank" rel="noopener noreferrer">
+            <a href="https://github.com/benpml/repo-to-llm-text" target="_blank" rel="noopener noreferrer">
               <Github className="w-6 h-6 text-gray-600 hover:text-gray-800" />
             </a>
           </div>
