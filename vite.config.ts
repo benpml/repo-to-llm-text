@@ -4,7 +4,7 @@ import { defineConfig } from "vite"
 
 export default defineConfig({
   plugins: [react()],
-  base: process.env.GITHUB_ACTIONS ? '/repo2txt-remember/' : '/',
+  base: process.env.GITHUB_ACTIONS ? '/repo-to-llm-text/' : '/',
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
