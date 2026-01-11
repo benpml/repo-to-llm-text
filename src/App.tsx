@@ -3,7 +3,8 @@ import './App.css'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Github, FolderOpen, File, ChevronDown, ChevronRight, Copy, Download, Trash2, Save, Upload, Globe } from 'lucide-react'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { Github, FolderOpen, File, ChevronDown, ChevronRight, Copy, Download, Trash2, Save, Upload, Globe, Settings, Minus } from 'lucide-react'
 
 interface TreeItem {
   path: string
@@ -54,14 +55,54 @@ function App() {
   const [hasSavedPrefs, setHasSavedPrefs] = useState(false)
   const [localFiles, setLocalFiles] = useState<Map<string, File>>(new Map())
   const [directoryName, setDirectoryName] = useState('')
+  const [savedProfiles, setSavedProfiles] = useState<{ key: string; name: string; timestamp: number; isLocal: boolean }[]>([])
+  const [showProfiles, setShowProfiles] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const loadSavedProfiles = useCallback(() => {
+    const profiles: { key: string; name: string; timestamp: number; isLocal: boolean }[] = []
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (key && (key.startsWith('repo2txt_prefs_') || key.startsWith('repo2txt_local_prefs_'))) {
+        try {
+          const data = JSON.parse(localStorage.getItem(key) || '{}')
+          const isLocal = key.startsWith('repo2txt_local_prefs_')
+          let name = key
+          if (isLocal) {
+            name = key.replace('repo2txt_local_prefs_', '').replace(/_/g, ' ')
+          } else {
+            name = key.replace('repo2txt_prefs_', '').replace('_', '/')
+          }
+          profiles.push({
+            key,
+            name,
+            timestamp: data.timestamp || 0,
+            isLocal
+          })
+        } catch {
+          // Skip invalid entries
+        }
+      }
+    }
+    profiles.sort((a, b) => b.timestamp - a.timestamp)
+    setSavedProfiles(profiles)
+  }, [])
+
+  const deleteProfile = (key: string) => {
+    localStorage.removeItem(key)
+    loadSavedProfiles()
+    if (key === repoKey) {
+      setHasSavedPrefs(false)
+    }
+  }
 
   useEffect(() => {
     const savedToken = localStorage.getItem('githubAccessToken')
     if (savedToken) {
       setAccessToken(savedToken)
     }
-  }, [])
+    loadSavedProfiles()
+  }, [loadSavedProfiles])
 
   const getRepoKey = (identifier: string, isLocal: boolean): string => {
     if (isLocal) {
@@ -96,7 +137,8 @@ function App() {
     }
     localStorage.setItem(repoKey, JSON.stringify(prefs))
     setHasSavedPrefs(true)
-  }, [repoKey, selectedFiles, tree])
+    loadSavedProfiles()
+  }, [repoKey, selectedFiles, tree, loadSavedProfiles])
 
   const loadPreferences = useCallback((key: string, allPaths: string[]): Set<string> | null => {
     const saved = localStorage.getItem(key)
@@ -626,19 +668,20 @@ function App() {
       return (
         <div key={node.path}>
           <div className="flex items-center py-1" style={{ paddingLeft: `${depth * 20}px` }}>
-            <Checkbox
-              checked={state === 'checked'}
-              ref={(el) => {
-                if (el) {
-                  const input = el.querySelector('button')
-                  if (input) {
-                    (input as HTMLButtonElement).dataset.state = state === 'indeterminate' ? 'indeterminate' : state === 'checked' ? 'checked' : 'unchecked'
-                  }
-                }
-              }}
-              onCheckedChange={(checked) => toggleDirectory(node, checked as boolean)}
-              className="mr-2"
-            />
+            {state === 'indeterminate' ? (
+              <button
+                onClick={() => toggleDirectory(node, true)}
+                className="mr-2 h-4 w-4 rounded border border-primary bg-primary flex items-center justify-center"
+              >
+                <Minus className="h-3 w-3 text-primary-foreground" />
+              </button>
+            ) : (
+              <Checkbox
+                checked={state === 'checked'}
+                onCheckedChange={(checked) => toggleDirectory(node, checked as boolean)}
+                className="mr-2"
+              />
+            )}
             <button
               onClick={() => toggleExpand(node.path)}
               className="mr-1 focus:outline-none"
@@ -673,29 +716,66 @@ function App() {
             </a>
           </div>
           <p className="text-gray-600 mb-4">Convert Code Repository to a Single Formatted Text File</p>
-          <p className="text-sm text-blue-600 mb-6">This version remembers your file selections!</p>
-
-          <div className="flex gap-2 mb-6">
+          <div className="flex items-center justify-between mb-6">
+            <p className="text-sm text-blue-600">This version remembers your file selections!</p>
             <Button
-              variant={mode === 'local' ? 'default' : 'outline'}
-              onClick={() => setMode('local')}
-              className={mode === 'local' ? 'bg-blue-600 hover:bg-blue-700' : ''}
+              variant="outline"
+              size="sm"
+              onClick={() => setShowProfiles(!showProfiles)}
+              className="text-gray-600"
             >
-              <Upload className="w-4 h-4 mr-2" />
-              Local Directory
-            </Button>
-            <Button
-              variant={mode === 'github' ? 'default' : 'outline'}
-              onClick={() => setMode('github')}
-              className={mode === 'github' ? 'bg-blue-600 hover:bg-blue-700' : ''}
-            >
-              <Globe className="w-4 h-4 mr-2" />
-              GitHub URL
+              <Settings className="w-4 h-4 mr-1" />
+              Saved Profiles ({savedProfiles.length})
             </Button>
           </div>
 
-          {mode === 'local' && (
-            <div className="space-y-4 mb-6">
+          {showProfiles && (
+            <div className="mb-6 p-4 border rounded-lg bg-gray-50">
+              <h3 className="text-sm font-medium text-gray-700 mb-3">Saved Profiles</h3>
+              {savedProfiles.length === 0 ? (
+                <p className="text-sm text-gray-500">No saved profiles yet. Save preferences after selecting files to create a profile.</p>
+              ) : (
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {savedProfiles.map(profile => (
+                    <div key={profile.key} className="flex items-center justify-between p-2 bg-white rounded border">
+                      <div className="flex items-center gap-2">
+                        {profile.isLocal ? (
+                          <Upload className="w-4 h-4 text-gray-400" />
+                        ) : (
+                          <Globe className="w-4 h-4 text-gray-400" />
+                        )}
+                        <span className="text-sm">{profile.name}</span>
+                        <span className="text-xs text-gray-400">
+                          {profile.timestamp ? new Date(profile.timestamp).toLocaleDateString() : ''}
+                        </span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => deleteProfile(profile.key)}
+                        className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          <Tabs value={mode} onValueChange={(v) => setMode(v as UploadMode)} className="mb-6">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="local" className="flex items-center gap-2">
+                <Upload className="w-4 h-4" />
+                Local Directory
+              </TabsTrigger>
+              <TabsTrigger value="github" className="flex items-center gap-2">
+                <Globe className="w-4 h-4" />
+                GitHub URL
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value="local" className="space-y-4 mt-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Select Directory:</label>
                 <input
@@ -717,11 +797,8 @@ function App() {
               <p className="text-sm text-gray-500">
                 Select a folder from your computer. Files in .git and node_modules folders are automatically excluded.
               </p>
-            </div>
-          )}
-
-          {mode === 'github' && (
-            <div className="space-y-4 mb-6">
+            </TabsContent>
+            <TabsContent value="github" className="space-y-4 mt-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">GitHub URL:</label>
                 <Input
@@ -754,8 +831,8 @@ function App() {
                 <FolderOpen className="w-4 h-4 mr-2" />
                 {loading ? 'Fetching...' : 'Fetch Directory Structure'}
               </Button>
-            </div>
-          )}
+            </TabsContent>
+          </Tabs>
 
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
