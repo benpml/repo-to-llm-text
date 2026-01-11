@@ -671,9 +671,9 @@ function App() {
             {state === 'indeterminate' ? (
               <button
                 onClick={() => toggleDirectory(node, true)}
-                className="mr-2 h-4 w-4 rounded border border-primary bg-primary flex items-center justify-center"
+                className="mr-2 h-4 w-4 shrink-0 rounded-sm border border-zinc-900 bg-zinc-900 flex items-center justify-center shadow"
               >
-                <Minus className="h-3 w-3 text-primary-foreground" />
+                <Minus className="h-3 w-3 text-zinc-50" />
               </button>
             ) : (
               <Checkbox
