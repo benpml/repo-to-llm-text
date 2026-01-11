@@ -1,44 +1,24 @@
-# Repo2txt Remember
+# Repo to LLM Text
 
-Convert code repositories to a single formatted text file with **persistent file preferences**.
+Easily convert code repositories to LLM friendly plain text for prompting via local upload or Github url.
 
-## Features
+Lets you save file selection preferences per-repo locally in your browser so you don't have to select / deselect the same files each time.
 
-- **Local Directory Upload** - Select a folder from your computer (primary method)
-- **GitHub URL Upload** - Fetch any public GitHub repository
-- **Persistent Preferences** - Your file selections are saved and restored automatically
-- **Profile Management** - View and delete saved profiles
-- **Extension Filtering** - Filter files by common extensions
-- **Indeterminate Checkboxes** - Visual indicator for partially selected folders
+## Use it here:
 
-## Live Demo
-
-Visit: https://benpml.github.io/repo2txt-remember/
+https://benpml.github.io/repo-to-llm-text/
 
 ## How It Works
 
 1. Upload a local directory or enter a GitHub URL
 2. Select/deselect files you want to include
-3. Click "Save Preferences" to remember your selections
-4. Next time you upload the same directory/repo, your preferences are restored
-5. Generate formatted text output with directory structure
+3. Generate formatted text output with directory structure
+4. Click "Save Preferences" to remember or update your file selections for this repo for next time
+5. Manage your saved preferences under "Saved Profiles".
 
-## Development
+## Stack
 
-```bash
-# Install dependencies
-npm install
-
-# Run development server
-npm run dev
-
-# Build for production
-npm run build
-```
-
-## Deployment
-
-This app is automatically deployed to GitHub Pages via GitHub Actions when you push to the `main` branch.
+Typescript + React
 
 ## Credits
 
