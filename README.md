@@ -1,50 +1,45 @@
-# React + TypeScript + Vite
+# Repo2txt Remember
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Convert code repositories to a single formatted text file with **persistent file preferences**.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **Local Directory Upload** - Select a folder from your computer (primary method)
+- **GitHub URL Upload** - Fetch any public GitHub repository
+- **Persistent Preferences** - Your file selections are saved and restored automatically
+- **Profile Management** - View and delete saved profiles
+- **Extension Filtering** - Filter files by common extensions
+- **Indeterminate Checkboxes** - Visual indicator for partially selected folders
 
-## Expanding the ESLint configuration
+## Live Demo
 
-If you are developing a production application, we recommend updating the configuration to enable type aware lint rules:
+Visit: https://benpml.github.io/repo2txt-remember/
 
-- Configure the top-level `parserOptions` property like this:
+## How It Works
 
-```js
-export default tseslint.config({
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
+1. Upload a local directory or enter a GitHub URL
+2. Select/deselect files you want to include
+3. Click "Save Preferences" to remember your selections
+4. Next time you upload the same directory/repo, your preferences are restored
+5. Generate formatted text output with directory structure
+
+## Development
+
+```bash
+# Install dependencies
+npm install
+
+# Run development server
+npm run dev
+
+# Build for production
+npm run build
 ```
 
-- Replace `tseslint.configs.recommended` to `tseslint.configs.recommendedTypeChecked` or `tseslint.configs.strictTypeChecked`
-- Optionally add `...tseslint.configs.stylisticTypeChecked`
-- Install [eslint-plugin-react](https://github.com/jsx-eslint/eslint-plugin-react) and update the config:
+## Deployment
 
-```js
-// eslint.config.js
-import react from 'eslint-plugin-react'
+This app is automatically deployed to GitHub Pages via GitHub Actions when you push to the `main` branch.
 
-export default tseslint.config({
-  // Set the react version
-  settings: { react: { version: '18.3' } },
-  plugins: {
-    // Add the react plugin
-    react,
-  },
-  rules: {
-    // other rules...
-    // Enable its recommended rules
-    ...react.configs.recommended.rules,
-    ...react.configs['jsx-runtime'].rules,
-  },
-})
-```
+## Credits
+
+Inspired by [repo2txt](https://github.com/abinthomasonline/repo2txt) by Abin Thomas.
