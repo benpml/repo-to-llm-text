@@ -715,7 +715,7 @@ function App() {
               <Github className="w-6 h-6 text-gray-600 hover:text-gray-800" />
             </a>
           </div>
-          <p className="text-gray-600 mb-4">Convert Code Repository to a Single Formatted Text File</p>
+          <p className="text-gray-600 mb-4">Convert code repository into LLM-friendly plain text for prompting.</p>
           <div className="flex items-center justify-between mb-6">
             <p className="text-sm text-blue-600">This version remembers your file selections!</p>
             <Button
